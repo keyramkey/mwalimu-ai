@@ -55,12 +55,13 @@ def get_ai_response(message: str, history: list) -> str:
     try:
         contents = []
         for item in (history or []):
-            if isinstance(item, (list, tuple)) and len(item) >= 2:
-                user_msg, bot_msg = item[0], item[1]
-                if user_msg:
-                    contents.append({"role": "user", "parts": [{"text": str(user_msg)}]})
-                if bot_msg:
-                    contents.append({"role": "model", "parts": [{"text": str(bot_msg)}]})
+            if isinstance(item, dict) and "role" in item and "content" in item:
+                role = item["role"]
+                text = item["content"]
+                if role == "user":
+                    contents.append({"role": "user", "parts": [{"text": str(text)}]})
+                elif role == "assistant":
+                    contents.append({"role": "model", "parts": [{"text": str(text)}]})
 
         contents.append({"role": "user", "parts": [{"text": message}]})
 
@@ -83,7 +84,12 @@ def respond(message, history):
         return history, None, ""
 
     bot_response = get_ai_response(user_text, history)
-    new_history = (history or []) + [[user_text, bot_response]]
+
+    # Format mpya ya Gradio 6 (messages)
+    new_history = (history or []) + [
+        {"role": "user", "content": user_text},
+        {"role": "assistant", "content": bot_response}
+    ]
 
     try:
         audio_path = asyncio.run(text_to_speech(bot_response))
@@ -94,7 +100,7 @@ def respond(message, history):
 
 
 # ======================
-# SIMPLE + STABLE UI (Gradio 6 compatible)
+# UI (Gradio 6 compatible)
 # ======================
 
 with gr.Blocks(title="Mwalimu AI - Form 1") as demo:
@@ -108,6 +114,7 @@ with gr.Blocks(title="Mwalimu AI - Form 1") as demo:
 
     chatbot = gr.Chatbot(
         height=450,
+        type="messages",  # Muhimu sana kwa Gradio 6
         avatar_images=(None, "https://cdn-icons-png.flaticon.com/512/3135/3135715.png")
     )
 
