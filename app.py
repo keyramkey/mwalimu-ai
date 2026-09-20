@@ -1,4 +1,5 @@
 import os
+import re
 import gradio as gr
 from google import genai
 from dotenv import load_dotenv
@@ -36,10 +37,46 @@ Kanuni:
 3. Endelea na mazungumzo kwa kutumia historia.
 """
 
+def clean_text_for_tts(text: str) -> str:
+    """Ondoa Markdown alama ili TTS isisome alama za ** * # - n.k."""
+    if not text:
+        return ""
+    
+    # Ondoa bold na italic
+    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # **bold**
+    text = re.sub(r'\*(.*?)\*', r'\1', text)      # *italic*
+    text = re.sub(r'__(.*?)__', r'\1', text)
+    text = re.sub(r'_(.*?)_', r'\1', text)
+    
+    # Ondoa headings
+    text = re.sub(r'^#+\s*', '', text, flags=re.MULTILINE)
+    
+    # Ondoa list markers
+    text = re.sub(r'^\s*[-*+]\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*\d+\.\s+', '', text, flags=re.MULTILINE)
+    
+    # Ondoa code blocks na backticks
+    text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
+    text = re.sub(r'`(.*?)`', r'\1', text)
+    
+    # Ondoa links [text](url)
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+    
+    # Safisha nafasi nyingi
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = re.sub(r' {2,}', ' ', text)
+    
+    return text.strip()
+
+
 async def text_to_speech(text: str):
     try:
+        clean = clean_text_for_tts(text)
+        if not clean:
+            return None
+            
         voice = "sw-TZ-DaudiNeural"
-        communicate = edge_tts.Communicate(text, voice)
+        communicate = edge_tts.Communicate(clean, voice)
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
         await communicate.save(temp_file.name)
         return temp_file.name
@@ -66,7 +103,7 @@ def get_ai_response(message: str, history: list) -> str:
         contents.append({"role": "user", "parts": [{"text": message}]})
 
         response = client.models.generate_content(
-            model="gemini-3.5-flash",          # ← Model inayopatikana muda mwingi
+            model="gemini-3.5-flash",
             contents=contents,
             config={
                 "system_instruction": SYSTEM_PROMPT,
