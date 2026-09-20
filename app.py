@@ -14,12 +14,11 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not GEMINI_API_KEY:
-    print("WARNING: GEMINI_API_KEY haipo. Weka kwenye Variables za Railway.")
+    print("WARNING: GEMINI_API_KEY haipo.")
     client = None
 else:
     client = genai.Client(api_key=GEMINI_API_KEY)
 
-# System Prompt - Mwalimu wa Form 1
 SYSTEM_PROMPT = """
 Wewe ni **Mwalimu Juma**, mwalimu mwenye uzoefu wa miaka 12 unayefundisha wanafunzi wa Form 1 nchini Tanzania.
 
@@ -27,33 +26,21 @@ Tabia yako:
 - Unazungumza Kiswahili sanifu, rahisi, na chenye heshima.
 - Una subira kubwa. Hata mwanafunzi akishindwa mara nyingi, unamhimiza.
 - Unafundisha hatua kwa hatua.
-- Unatumia mifano ya maisha ya kila siku ya Tanzania (shule, soko, nyumbani, michezo n.k.).
+- Unatumia mifano ya maisha ya kila siku ya Tanzania.
 - Unauliza maswali ili kuhakikisha mwanafunzi aelewa.
 - Unatoa pongezi unapofanya vizuri.
-- Hutoshei maneno ya Kiingereza isipokuwa ni muhimu sana (na unayatafsiri).
-- Unajibu kama mwalimu wa kweli, si kama roboti.
+- Hutoshei maneno ya Kiingereza isipokuwa ni muhimu sana.
+- Unajibu kama mwalimu wa kweli.
 
-Masomo unayofundisha:
-- Hisabati (Algebra, Geometry, Namba n.k.)
-- Sayansi (Fizikia, Kemia, Biolojia ya Form 1)
-- Kiswahili
-- Historia
-- Jiografia
-- Stadi za Kazi na Maisha
+Masomo: Hisabati, Sayansi, Kiswahili, Historia, Jiografia na Stadi za Kazi.
 
 Kanuni:
 1. Jibu daima kwa Kiswahili.
 2. Kama mwanafunzi amekosea, mrekebishe kwa upole.
-3. Kama swali ni nje ya mtaala wa Form 1, mwambie kwa upole na umrudishe kwenye mada.
-4. Endelea na mazungumzo kwa kutumia historia ya mazungumzo.
+3. Endelea na mazungumzo kwa kutumia historia.
 """
 
-# ======================
-# HELPER FUNCTIONS
-# ======================
-
 async def text_to_speech(text: str):
-    """Convert text to speech using edge-tts (Swahili voice)"""
     try:
         voice = "sw-TZ-DaudiNeural"
         communicate = edge_tts.Communicate(text, voice)
@@ -66,17 +53,18 @@ async def text_to_speech(text: str):
 
 
 def get_ai_response(message: str, history: list) -> str:
-    """Get response from Gemini with conversation history"""
     if client is None:
-        return "Samahani, API Key haipo. Tafadhali weka GEMINI_API_KEY kwenye Railway Variables."
+        return "Samahani, API Key haipo. Weka GEMINI_API_KEY kwenye Railway Variables."
 
     try:
         contents = []
-        for human, ai in history:
-            if human:
-                contents.append({"role": "user", "parts": [{"text": human}]})
-            if ai:
-                contents.append({"role": "model", "parts": [{"text": ai}]})
+        for msg in history:
+            role = msg.get("role")
+            content = msg.get("content", "")
+            if role == "user":
+                contents.append({"role": "user", "parts": [{"text": content}]})
+            elif role == "assistant":
+                contents.append({"role": "model", "parts": [{"text": content}]})
 
         contents.append({"role": "user", "parts": [{"text": message}]})
 
@@ -90,18 +78,21 @@ def get_ai_response(message: str, history: list) -> str:
         )
         return response.text.strip()
     except Exception as e:
-        return f"Samahani, nimepata hitilafu. Tafadhali jaribu tena. (Hitilafu: {str(e)})"
+        return f"Samahani, nimepata hitilafu. (Hitilafu: {str(e)})"
 
 
 def respond(message, history):
-    """Main response function"""
     user_text = (message or "").strip()
-
     if not user_text:
         return history, None, ""
 
-    bot_response = get_ai_response(user_text, history)
-    new_history = history + [[user_text, bot_response]]
+    bot_response = get_ai_response(user_text, history or [])
+
+    # New Gradio messages format
+    new_history = (history or []) + [
+        {"role": "user", "content": user_text},
+        {"role": "assistant", "content": bot_response}
+    ]
 
     try:
         audio_path = asyncio.run(text_to_speech(bot_response))
@@ -115,24 +106,17 @@ def respond(message, history):
 # GRADIO INTERFACE
 # ======================
 
-css = """
-.gradio-container {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-}
-"""
-
 with gr.Blocks(title="Mwalimu AI - Form 1") as demo:
 
     gr.Markdown("""
     # 🎓 Mwalimu AI — Mwalimu wako wa Form 1
     **Karibu!** Mimi ni **Mwalimu Juma**. Ninaweza kukufundisha Hisabati, Sayansi, Kiswahili na masomo mengine kwa Kiswahili.
-    
-    Andika swali lako hapa chini.
     """)
 
     chatbot = gr.Chatbot(
         label="Mazungumzo na Mwalimu",
         height=420,
+        type="messages",
         avatar_images=(None, "https://cdn-icons-png.flaticon.com/512/3135/3135715.png")
     )
 
@@ -146,7 +130,6 @@ with gr.Blocks(title="Mwalimu AI - Form 1") as demo:
         submit_btn = gr.Button("Tuma", variant="primary", scale=1)
 
     audio_output = gr.Audio(label="Jibu la Mwalimu (Sauti)", autoplay=True)
-
     clear_btn = gr.Button("Anza Upya")
 
     submit_btn.click(
@@ -163,18 +146,11 @@ with gr.Blocks(title="Mwalimu AI - Form 1") as demo:
 
     clear_btn.click(lambda: ([], None, ""), None, [chatbot, audio_output, msg])
 
-    gr.Markdown("""
-    ---
-    **Maelekezo:**  
-    - Andika swali kwa Kiswahili  
-    - Mwalimu atajibu kwa maandishi + sauti  
-    """)
+    gr.Markdown("---\n**Andika swali kwa Kiswahili. Mwalimu atajibu kwa maandishi + sauti.**")
 
 if __name__ == "__main__":
     demo.launch(
         server_name="0.0.0.0",
-        server_port=int(os.getenv("PORT", 7860)),
-        share=False,
-        css=css,
-        theme=gr.themes.Soft()
+        server_port=int(os.getenv("PORT", 8080)),
+        share=False
     )
