@@ -66,7 +66,7 @@ def get_ai_response(message: str, history: list) -> str:
         contents.append({"role": "user", "parts": [{"text": message}]})
 
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-3.6-flash",          # ← Imebadilishwa hapa
             contents=contents,
             config={
                 "system_instruction": SYSTEM_PROMPT,
@@ -85,7 +85,6 @@ def respond(message, history):
 
     bot_response = get_ai_response(user_text, history)
 
-    # Format mpya ya Gradio 6
     new_history = (history or []) + [
         {"role": "user", "content": user_text},
         {"role": "assistant", "content": bot_response}
@@ -98,10 +97,6 @@ def respond(message, history):
 
     return new_history, audio_path, ""
 
-
-# ======================
-# UI (Gradio 6)
-# ======================
 
 with gr.Blocks(title="Mwalimu AI - Form 1") as demo:
 
