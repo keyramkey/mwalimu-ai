@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 import edge_tts
 import asyncio
 import tempfile
-from datetime import datetime
 
 load_dotenv()
 
@@ -14,70 +13,77 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 # ======================
-# WALIMU (Sauti tofauti)
+# MASOMO YA TANZANIA (Form 1 - Form 6)
 # ======================
-TEACHERS = {
-    "Mwalimu Juma (Mwanaume - Kiswahili)": {
-        "voice": "sw-TZ-DaudiNeural",
-        "prompt_name": "Mwalimu Juma",
-        "style": "mwalimu mwenye uzoefu, subira, anayefundisha hatua kwa hatua"
-    },
-    "Bi. Amina (Mwanamke - Kiswahili)": {
-        "voice": "sw-TZ-ZuriNeural",
-        "prompt_name": "Bi. Amina",
-        "style": "mwalimu mwanamke mwenye upole, anayehimiza sana na kutoa mifano ya kila siku"
-    },
-    "Mr. John (Mwanaume - English)": {
-        "voice": "en-US-GuyNeural",
-        "prompt_name": "Mr. John",
-        "style": "patient English teacher who explains step by step with simple examples"
-    },
-    "Ms. Sarah (Mwanamke - English)": {
-        "voice": "en-US-JennyNeural",
-        "prompt_name": "Ms. Sarah",
-        "style": "friendly and clear English teacher who checks understanding often"
-    }
+SUBJECTS = {
+    "Kidato cha 1": [
+        "Hisabati", "Kiswahili", "English Language", "Biology", 
+        "Geography", "History", "Civics", "Physics", "Chemistry", "Agriculture"
+    ],
+    "Kidato cha 2": [
+        "Hisabati", "Kiswahili", "English Language", "Biology", 
+        "Geography", "History", "Civics", "Physics", "Chemistry", "Agriculture"
+    ],
+    "Kidato cha 3": [
+        "Hisabati", "Kiswahili", "English Language", "Biology", 
+        "Geography", "History", "Civics", "Physics", "Chemistry", 
+        "Agriculture", "Computer Science", "Business Studies"
+    ],
+    "Kidato cha 4": [
+        "Hisabati", "Kiswahili", "English Language", "Biology", 
+        "Geography", "History", "Civics", "Physics", "Chemistry", 
+        "Agriculture", "Computer Science", "Business Studies", "Additional Mathematics"
+    ],
+    "Kidato cha 5": [
+        "Advanced Mathematics", "Physics", "Chemistry", "Biology",
+        "Geography", "History", "Economics", "Accountancy", 
+        "Kiswahili", "English Language", "Literature in English"
+    ],
+    "Kidato cha 6": [
+        "Advanced Mathematics", "Physics", "Chemistry", "Biology",
+        "Geography", "History", "Economics", "Accountancy", 
+        "Kiswahili", "English Language", "Literature in English"
+    ]
 }
 
-def get_system_prompt(teacher_name: str) -> str:
-    t = TEACHERS[teacher_name]
-    if "English" in teacher_name:
+# Walimu na sauti zao
+TEACHERS = {
+    "Mwalimu Juma": {"voice": "sw-TZ-DaudiNeural", "lang": "sw"},
+    "Bi. Amina": {"voice": "sw-TZ-ZuriNeural", "lang": "sw"},
+    "Mr. John": {"voice": "en-US-GuyNeural", "lang": "en"},
+    "Ms. Sarah": {"voice": "en-US-JennyNeural", "lang": "en"},
+}
+
+def get_system_prompt(kidato: str, somo: str, teacher: str) -> str:
+    if TEACHERS[teacher]["lang"] == "en":
         return f"""
-You are {t['prompt_name']}, a Form 1 teacher in Tanzania.
-Style: {t['style']}.
-- Speak simple, clear English.
-- Teach step by step with everyday examples.
-- Always check if the student understands.
+You are {teacher}, a professional Form {kidato[-1]} teacher in Tanzania teaching {somo}.
+- Teach clearly step by step using simple English.
+- Use everyday examples.
+- Check understanding often.
 - Be patient and encouraging.
-- Give quizzes when appropriate.
+- Speak as a real classroom teacher.
 """
     else:
         return f"""
-Wewe ni {t['prompt_name']}, mwalimu wa Form 1 nchini Tanzania.
-Tabia: {t['style']}.
-- Unazungumza Kiswahili sanifu na rahisi.
+Wewe ni {teacher}, mwalimu wa {kidato} unayefundisha somo la {somo} nchini Tanzania.
+- Unazungumza Kiswahili sanifu, rahisi na chenye heshima.
 - Unafundisha hatua kwa hatua kwa mifano ya maisha ya kila siku.
 - Unauliza maswali ili kuhakikisha mwanafunzi aelewa.
 - Unatoa pongezi na unamrekebisha kwa upole.
-- Unapenda kutoa quiz fupi baada ya kufundisha.
+- Unafundisha kama mwalimu wa kweli darasani.
 """
 
-# ======================
-# SAFISHA MAANDISHI KWA TTS
-# ======================
 def clean_text_for_tts(text: str) -> str:
     if not text:
         return ""
-
-    # Ondoa LaTeX
+    # Ondoa LaTeX & Markdown
     text = re.sub(r'\$\$(.*?)\$\$', r'\1', text, flags=re.DOTALL)
     text = re.sub(r'\\\((.*?)\\\)', r'\1', text)
     text = re.sub(r'\\\[(.*?)\\\]', r'\1', text)
     text = re.sub(r'\$(.*?)\$', r'\1', text)
     text = re.sub(r'\\[a-zA-Z]+\{([^}]*)\}', r'\1', text)
     text = re.sub(r'\\[a-zA-Z]+', '', text)
-
-    # Ondoa Markdown
     text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
     text = re.sub(r'\*(.*?)\*', r'\1', text)
     text = re.sub(r'^#+\s*', '', text, flags=re.MULTILINE)
@@ -86,21 +92,19 @@ def clean_text_for_tts(text: str) -> str:
     text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
     text = re.sub(r'`(.*?)`', r'\1', text)
 
-    # Badilisha herufi za hesabu ili zisomeke vizuri
-    text = re.sub(r'\b([xy])\b', lambda m: {"x": "eks", "y": "wai"}[m.group(1)], text, flags=re.IGNORECASE)
-    text = re.sub(r'\b([a-z])\b', lambda m: m.group(1).upper(), text)  # herufi moja → capital
+    # Herufi za hesabu
+    text = re.sub(r'\b([xX])\b', 'eks', text)
+    text = re.sub(r'\b([yY])\b', 'wai', text)
 
     text = re.sub(r'\n{3,}', '\n\n', text)
-    text = re.sub(r' {2,}', ' ', text)
     return text.strip()
-
 
 async def text_to_speech(text: str, voice: str):
     try:
         clean = clean_text_for_tts(text)
         if not clean:
             return None
-        communicate = edge_tts.Communicate(clean, voice, rate="+10%")  # haraka kidogo
+        communicate = edge_tts.Communicate(clean, voice, rate="+8%")
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
         await communicate.save(temp_file.name)
         return temp_file.name
@@ -108,15 +112,14 @@ async def text_to_speech(text: str, voice: str):
         print(f"TTS Error: {e}")
         return None
 
-
-def get_ai_response(message: str, history: list, teacher: str) -> str:
-    if client is None:
+def get_ai_response(message, history, kidato, somo, teacher):
+    if not client:
         return "Samahani, API Key haipo."
 
     try:
         contents = []
         for item in (history or []):
-            if isinstance(item, dict) and "role" in item and "content" in item:
+            if isinstance(item, dict):
                 role = "user" if item["role"] == "user" else "model"
                 contents.append({"role": role, "parts": [{"text": str(item["content"])}]})
 
@@ -126,34 +129,20 @@ def get_ai_response(message: str, history: list, teacher: str) -> str:
             model="gemini-3.5-flash",
             contents=contents,
             config={
-                "system_instruction": get_system_prompt(teacher),
+                "system_instruction": get_system_prompt(kidato, somo, teacher),
                 "temperature": 0.65,
             }
         )
         return response.text.strip()
     except Exception as e:
-        return f"Samahani, nimepata hitilafu. Jaribu tena.\n\n({str(e)})"
+        return f"Samahani, nimepata hitilafu.\n\n({str(e)})"
 
-
-# ======================
-# QUIZ STATE
-# ======================
-quiz_state = {
-    "active": False,
-    "questions": [],
-    "current": 0,
-    "score": 0,
-    "answers": []
-}
-
-
-def respond(message, history, teacher):
+def respond(message, history, kidato, somo, teacher):
     user_text = (message or "").strip()
     if not user_text:
-        return history, None, "", gr.update()
+        return history, None, ""
 
-    bot_response = get_ai_response(user_text, history, teacher)
-
+    bot_response = get_ai_response(user_text, history, kidato, somo, teacher)
     new_history = (history or []) + [
         {"role": "user", "content": user_text},
         {"role": "assistant", "content": bot_response}
@@ -165,114 +154,100 @@ def respond(message, history, teacher):
     except:
         audio_path = None
 
-    return new_history, audio_path, "", gr.update(visible=False)
+    return new_history, audio_path, ""
 
+def update_subjects(kidato):
+    return gr.update(choices=SUBJECTS.get(kidato, []), value=SUBJECTS.get(kidato, [""])[0])
 
-def start_quiz(topic, teacher):
-    if not topic.strip():
-        return "Tafadhali andika mada ya quiz (mfano: Algebra, Fractions, Photosynthesis)", gr.update(visible=False), None
-
-    prompt = f"""
-Tengeneza quiz fupi ya Form 1 juu ya: {topic}
-Toa maswali 4 tu ya multiple choice.
-Kila swali liwe na chaguo A B C D.
-Andika kwa format hii tu:
-
-SWALI 1: ...
-A) ...
-B) ...
-C) ...
-D) ...
-JIBU: A
-
-SWALI 2: ...
-...
+# ======================
+# UI NZURI SANA
+# ======================
+custom_css = """
+.gradio-container {
+    max-width: 1000px !important;
+    margin: auto;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+}
+.main-title {
+    text-align: center;
+    background: linear-gradient(135deg, #f97316, #ea580c);
+    color: white;
+    padding: 18px;
+    border-radius: 16px;
+    margin-bottom: 20px;
+}
+#chatbot {
+    height: 460px !important;
+    border-radius: 16px !important;
+}
+.control-card {
+    background: #fff7ed;
+    border-radius: 14px;
+    padding: 16px;
+    border: 1px solid #fed7aa;
+}
 """
-    raw = get_ai_response(prompt, [], teacher)
-    
-    # Parse simple (for demo)
-    quiz_state["active"] = True
-    quiz_state["questions"] = [raw]   # simplified for now
-    quiz_state["current"] = 0
-    quiz_state["score"] = 0
 
-    return raw, gr.update(visible=True), None
+with gr.Blocks(title="Mwalimu AI Tanzania", css=custom_css, theme=gr.themes.Soft(primary_hue="orange")) as demo:
 
-
-# ======================
-# UI BORA
-# ======================
-with gr.Blocks(
-    title="Mwalimu AI - Form 1",
-    theme=gr.themes.Soft(primary_hue="orange", secondary_hue="blue"),
-    css="""
-    .gradio-container { max-width: 950px !important; }
-    #chatbot { height: 480px !important; }
-    """
-) as demo:
-
-    gr.Markdown("""
-    # 🎓 Mwalimu AI - Form 1
-    **Chagua mwalimu wako → Anza kujifunza au fanya Quiz**
+    gr.HTML("""
+    <div class="main-title">
+        <h1 style="margin:0; font-size:28px;">🎓 Mwalimu AI Tanzania</h1>
+        <p style="margin:6px 0 0; opacity:0.95;">Kidato cha 1 – 6 • Masomo yote • Sauti ya Kweli</p>
+    </div>
     """)
 
     with gr.Row():
-        teacher_dd = gr.Dropdown(
-            choices=list(TEACHERS.keys()),
-            value="Mwalimu Juma (Mwanaume - Kiswahili)",
-            label="👨‍🏫 Chagua Mwalimu",
-            scale=2
-        )
+        with gr.Column(scale=1, elem_classes="control-card"):
+            kidato = gr.Dropdown(
+                choices=list(SUBJECTS.keys()),
+                value="Kidato cha 1",
+                label="📚 Chagua Kidato"
+            )
+            somo = gr.Dropdown(
+                choices=SUBJECTS["Kidato cha 1"],
+                value="Hisabati",
+                label="📖 Chagua Somo"
+            )
+            teacher = gr.Dropdown(
+                choices=list(TEACHERS.keys()),
+                value="Mwalimu Juma",
+                label="👨‍🏫 Chagua Mwalimu"
+            )
 
-    with gr.Tabs():
-        with gr.Tab("💬 Mazungumzo"):
+        with gr.Column(scale=2):
             chatbot = gr.Chatbot(
                 elem_id="chatbot",
-                avatar_images=(None, "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"),
-                show_label=False
+                show_label=False,
+                avatar_images=(None, "https://cdn-icons-png.flaticon.com/512/3135/3135715.png")
             )
-            with gr.Row():
-                msg = gr.Textbox(
-                    placeholder="Andika swali lako hapa...",
-                    scale=5,
-                    show_label=False,
-                    lines=2
-                )
-                submit_btn = gr.Button("Tuma", variant="primary", scale=1)
 
-            audio_output = gr.Audio(label="Sauti ya Mwalimu", autoplay=True)
-            clear_btn = gr.Button("🗑️ Anza Upya")
+    with gr.Row():
+        msg = gr.Textbox(
+            placeholder="Andika swali lako hapa... (mfano: Nifundishe algebra)",
+            scale=5,
+            show_label=False,
+            lines=2
+        )
+        submit_btn = gr.Button("Tuma ➤", variant="primary", scale=1)
 
-        with gr.Tab("📝 Quiz"):
-            gr.Markdown("### Fanya Quiz fupi")
-            quiz_topic = gr.Textbox(label="Andika mada ya Quiz", placeholder="mfano: Algebra, Fractions, Photosynthesis...")
-            start_quiz_btn = gr.Button("Anza Quiz", variant="primary")
-            quiz_output = gr.Markdown()
-            quiz_audio = gr.Audio(autoplay=True)
-            quiz_choices = gr.Radio(
-                choices=["A", "B", "C", "D"],
-                label="Chagua jibu lako",
-                visible=False
-            )
+    audio_output = gr.Audio(label="🔊 Sauti ya Mwalimu", autoplay=True)
+    clear_btn = gr.Button("🗑️ Anza Upya")
 
     # Events
+    kidato.change(update_subjects, inputs=kidato, outputs=somo)
+
     submit_btn.click(
         respond,
-        inputs=[msg, chatbot, teacher_dd],
-        outputs=[chatbot, audio_output, msg, quiz_choices]
+        inputs=[msg, chatbot, kidato, somo, teacher],
+        outputs=[chatbot, audio_output, msg]
     )
     msg.submit(
         respond,
-        inputs=[msg, chatbot, teacher_dd],
-        outputs=[chatbot, audio_output, msg, quiz_choices]
+        inputs=[msg, chatbot, kidato, somo, teacher],
+        outputs=[chatbot, audio_output, msg]
     )
     clear_btn.click(lambda: ([], None, ""), None, [chatbot, audio_output, msg])
-
-    start_quiz_btn.click(
-        start_quiz,
-        inputs=[quiz_topic, teacher_dd],
-        outputs=[quiz_output, quiz_choices, quiz_audio]
-    )
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
