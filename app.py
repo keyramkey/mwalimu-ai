@@ -85,7 +85,7 @@ def respond(message, history):
 
     bot_response = get_ai_response(user_text, history)
 
-    # Format mpya ya Gradio 6 (messages)
+    # Format mpya ya Gradio 6
     new_history = (history or []) + [
         {"role": "user", "content": user_text},
         {"role": "assistant", "content": bot_response}
@@ -100,7 +100,7 @@ def respond(message, history):
 
 
 # ======================
-# UI (Gradio 6 compatible)
+# UI (Gradio 6)
 # ======================
 
 with gr.Blocks(title="Mwalimu AI - Form 1") as demo:
@@ -114,7 +114,6 @@ with gr.Blocks(title="Mwalimu AI - Form 1") as demo:
 
     chatbot = gr.Chatbot(
         height=450,
-        type="messages",  # Muhimu sana kwa Gradio 6
         avatar_images=(None, "https://cdn-icons-png.flaticon.com/512/3135/3135715.png")
     )
 
