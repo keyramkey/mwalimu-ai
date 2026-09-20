@@ -66,7 +66,7 @@ def get_ai_response(message: str, history: list) -> str:
         contents.append({"role": "user", "parts": [{"text": message}]})
 
         response = client.models.generate_content(
-            model="gemini-3.8-flash",          # ← Model ya bure + akili nzuri
+            model="gemini-3.5-flash",          # ← Model inayopatikana muda mwingi
             contents=contents,
             config={
                 "system_instruction": SYSTEM_PROMPT,
